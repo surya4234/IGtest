@@ -8,9 +8,9 @@ from sentiment_model import analyze_sentiment  # Your sentiment analysis functio
 # -------------------- Load Environment Variables --------------------
 load_dotenv()
 
-CLIENT_ID = os.getenv("CLIENT_ID")
-CLIENT_SECRET = os.getenv("CLIENT_SECRET")
-REDIRECT_URI = os.getenv("REDIRECT_URI")  # e.g., https://yourapp.onrender.com/auth/callback
+CLIENT_ID = "778947941512009"
+CLIENT_SECRET = "1b7645b486ae4261bedb637f9ff125dc"
+REDIRECT_URI = "https://igtest-j27v.onrender.com/auth/callback"  # e.g., https://yourapp.onrender.com/auth/callback
 
 # -------------------- Flask Setup --------------------
 app = Flask(__name__)
@@ -27,16 +27,7 @@ def login():
     Redirects user to Instagram OAuth for multi-user login.
     Make sure REDIRECT_URI in .env and Meta app matches exactly.
     """
-    oauth_url = (
-        "https://www.instagram.com/oauth/authorize"
-        f"?client_id={CLIENT_ID}"
-        f"&redirect_uri={REDIRECT_URI}"  # e.g., https://yourapp.onrender.com/auth/callback
-        "&scope=instagram_basic,instagram_manage_comments,"
-        "instagram_manage_messages,instagram_content_publish,"
-        "instagram_manage_insights"
-        "&response_type=code"
-        "&force_reauth=true"  # forces login even if previously authorized
-    )
+    oauth_url = "https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=778947941512009&redirect_uri=https://igtest-j27v.onrender.com/auth/callback&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages%2Cinstagram_business_manage_comments%2Cinstagram_business_content_publish%2Cinstagram_business_manage_insights"
     return redirect(oauth_url)
 
 # -------------------- Step 2: OAuth Callback --------------------
@@ -167,4 +158,5 @@ def home():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
 
