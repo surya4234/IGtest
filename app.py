@@ -10,7 +10,7 @@ CORS(app)  # ✅ Allow frontend (e.g. React) to access API
 # Instagram App Credentials
 CLIENT_ID = "778947941512009"
 CLIENT_SECRET = "1b7645b486ae4261bedb637f9ff125dc"  # ⚠️ Keep this secret in .env in production
-REDIRECT_URI = "https://igtest-j27v.onrender.com/"
+REDIRECT_URI = "https://igtest-j27v.onrender.com"
 
 # Simple in-memory store for tokens (for testing)
 user_tokens = {}
@@ -167,3 +167,4 @@ def fetch_comments(user_id, media_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
