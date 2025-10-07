@@ -9,7 +9,7 @@ from sentiment_model import analyze_sentiment  # Your sentiment analysis functio
 load_dotenv()
 
 CLIENT_ID = "778947941512009"
-CLIENT_SECRET = "1b7645b486ae4261bedb637f9ff125dc"
+CLIENT_SECRET = "f9bd90d51ff4d625c619f4efe7cbbcf6"
 REDIRECT_URI = "https://igtest-j27v.onrender.com/auth/callback"  # e.g., https://yourapp.onrender.com/auth/callback
 
 # -------------------- Flask Setup --------------------
@@ -43,7 +43,7 @@ def auth_callback():
         "client_id": CLIENT_ID,
         "client_secret": CLIENT_SECRET,
         "grant_type": "authorization_code",
-        "redirect_uri": https://igtest-j27v.onrender.com/auth/callback,
+        "redirect_uri": "https://igtest-j27v.onrender.com/auth/callback",
         "code": code
     }
     response = requests.post(token_url, data=data)
@@ -158,6 +158,7 @@ def home():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
 
 
 
