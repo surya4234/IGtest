@@ -23,14 +23,19 @@ user_tokens = {}
 # -------------------- Step 1: Redirect to Instagram OAuth --------------------
 @app.route("/login")
 def login():
+    """
+    Redirects user to Instagram OAuth for multi-user login.
+    Make sure REDIRECT_URI in .env and Meta app matches exactly.
+    """
     oauth_url = (
         "https://www.instagram.com/oauth/authorize"
         f"?client_id={CLIENT_ID}"
-        f"&redirect_uri={REDIRECT_URI}"
+        f"&redirect_uri={REDIRECT_URI}"  # e.g., https://yourapp.onrender.com/auth/callback
         "&scope=instagram_basic,instagram_manage_comments,"
         "instagram_manage_messages,instagram_content_publish,"
         "instagram_manage_insights"
         "&response_type=code"
+        "&force_reauth=true"  # forces login even if previously authorized
     )
     return redirect(oauth_url)
 
@@ -162,3 +167,4 @@ def home():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
