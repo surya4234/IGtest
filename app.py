@@ -1,162 +1,151 @@
 import os
 import requests
-from flask import Flask, redirect, request, jsonify, session
+from flask import Flask, redirect, request, jsonify
+from sentiment_model import analyze_sentiment
 from flask_cors import CORS
-from dotenv import load_dotenv
-
-# --------------------- Load Env ---------------------
-load_dotenv()
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "super_secret_key")
-CORS(app, supports_credentials=True)
+CORS(app)  # ✅ Enable CORS for React frontend
 
-FB_APP_ID = os.getenv("FB_APP_ID")
-FB_APP_SECRET = os.getenv("FB_APP_SECRET")
-FB_REDIRECT_URI = os.getenv("FB_REDIRECT_URI")
+# Instagram App Credentials
+CLIENT_ID = "778947941512009"
+CLIENT_SECRET = "1b7645b486ae4261bedb637f9ff125dc"  # Replace with real secret
+REDIRECT_URI = "https://igtest-j27v.onrender.com/"
 
-# --------------------- In-memory user token store ---------------------
-user_tokens = {}  # {session_id: access_token}
+# Temporary storage for user tokens (replace with DB in production)
+user_tokens = {}
 
-
-# --------------------- Simple Sentiment Classifier ---------------------
-def analyze_sentiment(text: str) -> str:
-    text = text.lower()
-    positive_words = ["good", "great", "love", "happy", "awesome", "excellent"]
-    negative_words = ["bad", "hate", "terrible", "sad", "awful", "poor"]
-
-    pos_count = sum(word in text for word in positive_words)
-    neg_count = sum(word in text for word in negative_words)
-
-    if pos_count > neg_count:
-        return "positive"
-    elif neg_count > pos_count:
-        return "negative"
-    else:
-        return "neutral"
-
-
-# --------------------- LOGIN ---------------------
+# ----------------------------------------------------------------
+# Step 1: Redirect user to Instagram OAuth
+# ----------------------------------------------------------------
 @app.route("/login")
 def login():
-    fb_auth_url = (
-        f"https://www.facebook.com/v20.0/dialog/oauth"
-        f"?client_id={FB_APP_ID}"
-        f"&redirect_uri={FB_REDIRECT_URI}"
-        f"&scope=pages_show_list,instagram_basic,instagram_manage_comments"
+    instagram_oauth_url = (
+        "https://www.instagram.com/oauth/authorize"
+        f"?client_id={CLIENT_ID}"
+        f"&redirect_uri={REDIRECT_URI}"
+        "&scope=instagram_basic,instagram_manage_comments,"
+        "instagram_manage_messages,instagram_content_publish,"
+        "instagram_manage_insights"
+        "&response_type=code"
     )
-    return redirect(fb_auth_url)
+    return redirect(instagram_oauth_url)
 
-
-# --------------------- CALLBACK ---------------------
-@app.route("/auth/callback")
-def callback():
+# ----------------------------------------------------------------
+# Step 2: OAuth callback - exchange code for token
+# ----------------------------------------------------------------
+@app.route("/")
+def auth_callback():
     code = request.args.get("code")
     if not code:
         return "Missing code", 400
 
-    # Short-lived token
-    short_res = requests.get(
-        "https://graph.facebook.com/v20.0/oauth/access_token",
-        params={
-            "client_id": FB_APP_ID,
-            "redirect_uri": FB_REDIRECT_URI,
-            "client_secret": FB_APP_SECRET,
-            "code": code,
-        },
-    ).json()
+    # 1️⃣ Exchange code for short-lived token
+    token_url = "https://api.instagram.com/oauth/access_token"
+    data = {
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
+        "grant_type": "authorization_code",
+        "redirect_uri": REDIRECT_URI,
+        "code": code
+    }
+    response = requests.post(token_url, data=data)
+    short_token_data = response.json()
 
-    short_token = short_res.get("access_token")
-    if not short_token:
-        return jsonify(short_res), 400
+    if "access_token" not in short_token_data:
+        return jsonify({"error": "Failed to get short-lived token", "details": short_token_data}), 400
 
-    # Long-lived token
-    long_res = requests.get(
-        "https://graph.facebook.com/v20.0/oauth/access_token",
-        params={
-            "grant_type": "fb_exchange_token",
-            "client_id": FB_APP_ID,
-            "client_secret": FB_APP_SECRET,
-            "fb_exchange_token": short_token,
-        },
-    ).json()
+    short_lived_token = short_token_data["access_token"]
+    user_id = short_token_data["user_id"]
 
-    access_token = long_res.get("access_token")
-    if not access_token:
-        return jsonify(long_res), 400
+    # 2️⃣ Exchange short-lived token for long-lived token
+    long_token_url = "https://graph.instagram.com/access_token"
+    params = {
+        "grant_type": "ig_exchange_token",
+        "client_secret": CLIENT_SECRET,
+        "access_token": short_lived_token
+    }
+    long_token_response = requests.get(long_token_url, params=params)
+    long_token_data = long_token_response.json()
 
-    # Store token per session
-    session_id = session.sid if hasattr(session, "sid") else request.cookies.get("session")
-    user_tokens[session_id] = access_token
+    if "access_token" not in long_token_data:
+        return jsonify({"error": "Failed to get long-lived token", "details": long_token_data}), 400
 
-    return redirect("/fetch_instagram_data")
+    long_lived_token = long_token_data["access_token"]
 
+    # Store token (keyed by user_id)
+    user_tokens[user_id] = long_lived_token
 
-# --------------------- FETCH POSTS & COMMENTS ---------------------
-@app.route("/fetch_instagram_data")
-def fetch_instagram_data():
-    session_id = session.sid if hasattr(session, "sid") else request.cookies.get("session")
-    token = user_tokens.get(session_id)
+    return jsonify({
+        "message": "✅ Authentication successful",
+        "user_id": user_id,
+        "long_lived_token": long_lived_token
+    })
+
+# ----------------------------------------------------------------
+# Step 3: Fetch user's posts
+# ----------------------------------------------------------------
+@app.route("/fetch_posts/<user_id>")
+def fetch_posts(user_id):
+    token = user_tokens.get(user_id)
     if not token:
-        return jsonify({"error": "Unauthorized. Please log in first."}), 401
+        return jsonify({"error": "User not authenticated"}), 401
 
-    # Get user pages
-    pages = requests.get(
-        "https://graph.facebook.com/v20.0/me/accounts",
-        params={"access_token": token},
-    ).json()
+    url = f"https://graph.instagram.com/{user_id}/media"
+    params = {"fields": "id,caption", "access_token": token}
+    resp = requests.get(url, params=params)
 
-    if "error" in pages:
-        return jsonify(pages), 400
+    try:
+        resp_data = resp.json()
+    except Exception:
+        return jsonify({"error": "Invalid response from Instagram API"}), 500
 
-    # Find Instagram Business Account ID dynamically
-    ig_account_id = None
-    for page in pages.get("data", []):
-        ig_data = requests.get(
-            f"https://graph.facebook.com/v20.0/{page['id']}",
-            params={"fields": "instagram_business_account", "access_token": token},
-        ).json()
-        if "instagram_business_account" in ig_data:
-            ig_account_id = ig_data["instagram_business_account"]["id"]
-            break
+    if resp.status_code != 200:
+        return jsonify({"error": "Failed to fetch posts", "details": resp_data}), resp.status_code
 
-    if not ig_account_id:
-        return jsonify({"error": "No Instagram Business Account found"}), 404
+    return jsonify(resp_data)
 
-    # Fetch posts and comments
-    posts = requests.get(
-        f"https://graph.facebook.com/v20.0/{ig_account_id}/media",
-        params={"fields": "id,caption,comments{id,username,text}", "access_token": token},
-    ).json()
+# ----------------------------------------------------------------
+# Step 4: Fetch comments + classify sentiment
+# ----------------------------------------------------------------
+@app.route("/fetch_comments/<user_id>/<media_id>")
+def fetch_comments(user_id, media_id):
+    token = user_tokens.get(user_id)
+    if not token:
+        return jsonify({"error": "User not authenticated"}), 401
 
-    if "error" in posts:
-        return jsonify(posts), 400
+    url = f"https://graph.instagram.com/{media_id}/comments"
+    params = {"fields": "id,text,username", "access_token": token}
+    resp = requests.get(url, params=params)
 
-    # Real-time sentiment classification
-    for post in posts.get("data", []):
-        if "comments" in post:
-            for comment in post["comments"]["data"]:
-                comment["sentiment"] = analyze_sentiment(comment["text"])
+    try:
+        comments_data = resp.json()
+    except Exception:
+        return jsonify({"error": "Invalid response from Instagram API"}), 500
 
-    return jsonify(posts)
+    if resp.status_code != 200 or "data" not in comments_data:
+        return jsonify({"error": "Failed to fetch comments", "details": comments_data}), resp.status_code
 
+    results = []
+    for c in comments_data["data"]:
+        text = c.get("text", "")
+        sentiment = analyze_sentiment(text)
+        results.append({
+            "id": c["id"],
+            "username": c["username"],
+            "text": text,
+            "sentiment": sentiment
+        })
 
-# --------------------- LOGOUT ---------------------
-@app.route("/logout")
-def logout():
-    session_id = session.sid if hasattr(session, "sid") else request.cookies.get("session")
-    if session_id in user_tokens:
-        del user_tokens[session_id]
-    session.clear()
-    return jsonify({"message": "Logged out successfully"})
+    return jsonify({
+        "media_id": media_id,
+        "comments_count": len(results),
+        "comments": results
+    })
 
-
-# --------------------- HOME ---------------------
-@app.route("/")
-def home():
-    return "✅ Instagram Real-Time Sentiment Backend is running"
-
-
-# --------------------- RUN ---------------------
+# ----------------------------------------------------------------
+# Run the server
+# ----------------------------------------------------------------
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=True)
