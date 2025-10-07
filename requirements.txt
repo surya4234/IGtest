@@ -2,7 +2,4 @@ Flask==3.0.3
 Flask-Cors==4.0.1
 python-dotenv==1.0.1
 requests==2.32.3
-
-# Sentiment analysis
-transformers==4.44.2
-torch==2.8.0
+textblob==0.18.0
