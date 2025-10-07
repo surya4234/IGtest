@@ -1,22 +1,22 @@
 import os
 import requests
 from flask import Flask, redirect, request, jsonify
-from sentiment_model import analyze_sentiment
 from flask_cors import CORS
+from sentiment_model import analyze_sentiment
 
 app = Flask(__name__)
-CORS(app)  # ✅ Enable CORS for React frontend
+CORS(app)  # ✅ Allow frontend (e.g. React) to access API
 
 # Instagram App Credentials
 CLIENT_ID = "778947941512009"
-CLIENT_SECRET = "1b7645b486ae4261bedb637f9ff125dc"  # Replace with real secret
+CLIENT_SECRET = "1b7645b486ae4261bedb637f9ff125dc"  # ⚠️ Keep this secret in .env in production
 REDIRECT_URI = "https://igtest-j27v.onrender.com/"
 
-# Temporary storage for user tokens (replace with DB in production)
+# Simple in-memory store for tokens (for testing)
 user_tokens = {}
 
 # ----------------------------------------------------------------
-# Step 1: Redirect user to Instagram OAuth
+# Step 1: Redirect user to Instagram OAuth URL
 # ----------------------------------------------------------------
 @app.route("/login")
 def login():
@@ -32,7 +32,7 @@ def login():
     return redirect(instagram_oauth_url)
 
 # ----------------------------------------------------------------
-# Step 2: OAuth callback - exchange code for token
+# Step 2: OAuth Callback - Exchange code for long-lived token
 # ----------------------------------------------------------------
 @app.route("/")
 def auth_callback():
@@ -53,7 +53,10 @@ def auth_callback():
     short_token_data = response.json()
 
     if "access_token" not in short_token_data:
-        return jsonify({"error": "Failed to get short-lived token", "details": short_token_data}), 400
+        return jsonify({
+            "error": "Failed to get short-lived token",
+            "details": short_token_data
+        }), 400
 
     short_lived_token = short_token_data["access_token"]
     user_id = short_token_data["user_id"]
@@ -69,11 +72,14 @@ def auth_callback():
     long_token_data = long_token_response.json()
 
     if "access_token" not in long_token_data:
-        return jsonify({"error": "Failed to get long-lived token", "details": long_token_data}), 400
+        return jsonify({
+            "error": "Failed to get long-lived token",
+            "details": long_token_data
+        }), 400
 
     long_lived_token = long_token_data["access_token"]
 
-    # Store token (keyed by user_id)
+    # Store token temporarily
     user_tokens[user_id] = long_lived_token
 
     return jsonify({
@@ -83,7 +89,7 @@ def auth_callback():
     })
 
 # ----------------------------------------------------------------
-# Step 3: Fetch user's posts
+# Step 3: Fetch User's Posts
 # ----------------------------------------------------------------
 @app.route("/fetch_posts/<user_id>")
 def fetch_posts(user_id):
@@ -92,7 +98,10 @@ def fetch_posts(user_id):
         return jsonify({"error": "User not authenticated"}), 401
 
     url = f"https://graph.instagram.com/{user_id}/media"
-    params = {"fields": "id,caption", "access_token": token}
+    params = {
+        "fields": "id,caption",
+        "access_token": token
+    }
     resp = requests.get(url, params=params)
 
     try:
@@ -101,12 +110,15 @@ def fetch_posts(user_id):
         return jsonify({"error": "Invalid response from Instagram API"}), 500
 
     if resp.status_code != 200:
-        return jsonify({"error": "Failed to fetch posts", "details": resp_data}), resp.status_code
+        return jsonify({
+            "error": "Failed to fetch posts",
+            "details": resp_data
+        }), resp.status_code
 
     return jsonify(resp_data)
 
 # ----------------------------------------------------------------
-# Step 4: Fetch comments + classify sentiment
+# Step 4: Fetch Comments + Sentiment Classification
 # ----------------------------------------------------------------
 @app.route("/fetch_comments/<user_id>/<media_id>")
 def fetch_comments(user_id, media_id):
@@ -115,7 +127,10 @@ def fetch_comments(user_id, media_id):
         return jsonify({"error": "User not authenticated"}), 401
 
     url = f"https://graph.instagram.com/{media_id}/comments"
-    params = {"fields": "id,text,username", "access_token": token}
+    params = {
+        "fields": "id,text,username",
+        "access_token": token
+    }
     resp = requests.get(url, params=params)
 
     try:
@@ -124,15 +139,18 @@ def fetch_comments(user_id, media_id):
         return jsonify({"error": "Invalid response from Instagram API"}), 500
 
     if resp.status_code != 200 or "data" not in comments_data:
-        return jsonify({"error": "Failed to fetch comments", "details": comments_data}), resp.status_code
+        return jsonify({
+            "error": "Failed to fetch comments",
+            "details": comments_data
+        }), resp.status_code
 
     results = []
-    for c in comments_data["data"]:
-        text = c.get("text", "")
+    for comment in comments_data["data"]:
+        text = comment.get("text", "")
         sentiment = analyze_sentiment(text)
         results.append({
-            "id": c["id"],
-            "username": c["username"],
+            "id": comment.get("id"),
+            "username": comment.get("username"),
             "text": text,
             "sentiment": sentiment
         })
@@ -144,7 +162,7 @@ def fetch_comments(user_id, media_id):
     })
 
 # ----------------------------------------------------------------
-# Run the server
+# Run the Flask server
 # ----------------------------------------------------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
