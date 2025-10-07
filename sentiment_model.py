@@ -1,24 +1,21 @@
-from transformers import pipeline
+from textblob import TextBlob
 
-# Load the model once at startup (not on every request)
-print("🔄 Loading sentiment analysis model...")
-sentiment_pipeline = pipeline("sentiment-analysis")
-print("✅ Sentiment model loaded.")
+print("🔄 Initializing lightweight sentiment analysis (TextBlob)...")
+print("✅ Sentiment analyzer ready.")
 
 def analyze_sentiment(text: str) -> str:
     """
-    Run real-time sentiment analysis on a comment.
-    Returns one of: 'positive', 'negative', 'neutral'
+    Run real-time sentiment analysis on a comment using TextBlob.
+    Returns: 'positive', 'negative', or 'neutral'
     """
-    if not text.strip():
+    if not text or not text.strip():
         return "neutral"
 
-    result = sentiment_pipeline(text)[0]
-    label = result['label'].lower()
+    polarity = TextBlob(text).sentiment.polarity
 
-    if "pos" in label:
+    if polarity > 0.1:
         return "positive"
-    elif "neg" in label:
+    elif polarity < -0.1:
         return "negative"
     else:
         return "neutral"
