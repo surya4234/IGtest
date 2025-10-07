@@ -43,7 +43,7 @@ def auth_callback():
         "client_id": CLIENT_ID,
         "client_secret": CLIENT_SECRET,
         "grant_type": "authorization_code",
-        "redirect_uri": REDIRECT_URI,
+        "redirect_uri": https://igtest-j27v.onrender.com/auth/callback,
         "code": code
     }
     response = requests.post(token_url, data=data)
@@ -158,5 +158,6 @@ def home():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
 
 
