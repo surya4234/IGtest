@@ -70,6 +70,23 @@ def auth_callback():
     })
 
 # -------------------- Step 3: Fetch User Posts --------------------
+# @app.route("/fetch_posts")
+# def fetch_posts():
+#     user_id = session.get("user_id")
+#     if not user_id or user_id not in user_tokens:
+#         return jsonify({"error": "User not authenticated"}), 401
+
+#     token = user_tokens[user_id]
+#     url = f"https://graph.instagram.com/{user_id}/media"
+#     params = {"fields": "id,caption", "access_token": token}
+
+#     resp = requests.get(url, params=params)
+#     data = resp.json()
+
+#     if resp.status_code != 200:
+#         return jsonify({"error": "Failed to fetch posts", "details": data}), resp.status_code
+
+#     return jsonify(data)
 @app.route("/fetch_posts")
 def fetch_posts():
     user_id = session.get("user_id")
@@ -77,14 +94,20 @@ def fetch_posts():
         return jsonify({"error": "User not authenticated"}), 401
 
     token = user_tokens[user_id]
-    url = f"https://graph.instagram.com/{user_id}/media"
-    params = {"fields": "id,caption", "access_token": token}
+    url = "https://graph.instagram.com/me/media"
+    params = {
+        "fields": "id,caption,media_type,media_url,permalink,thumbnail_url,timestamp",
+        "access_token": token
+    }
 
     resp = requests.get(url, params=params)
     data = resp.json()
 
     if resp.status_code != 200:
-        return jsonify({"error": "Failed to fetch posts", "details": data}), resp.status_code
+        return jsonify({
+            "error": "Failed to fetch posts",
+            "details": data
+        }), resp.status_code
 
     return jsonify(data)
 
@@ -139,3 +162,4 @@ def home():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
