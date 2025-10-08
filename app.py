@@ -59,18 +59,35 @@ def auth_callback():
     user_id = token_data["user_id"]
 
     # Exchange for long-lived token
+    # long_token_url = "https://graph.instagram.com/access_token"
+    # params = {
+    #     "grant_type": "ig_exchange_token",
+    #     "client_secret": CLIENT_SECRET,
+    #     "access_token": short_token
+    # }
+    # long_resp = requests.get(long_token_url, params=params).json()
+
+    # if "access_token" not in long_resp:
+    #     return jsonify({
+    #         "error": "Failed to get long-lived token",
+    #         "details": long_resp
+    #     }), 400
+    # Exchange short-lived token for long-lived token
     long_token_url = "https://graph.instagram.com/access_token"
     params = {
         "grant_type": "ig_exchange_token",
         "client_secret": CLIENT_SECRET,
         "access_token": short_token
     }
-    long_resp = requests.get(long_token_url, params=params).json()
-
-    if "access_token" not in long_resp:
+    
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    long_token_response = requests.post(long_token_url, data=params, headers=headers)
+    long_token_data = long_token_response.json()
+    
+    if "access_token" not in long_token_data:
         return jsonify({
             "error": "Failed to get long-lived token",
-            "details": long_resp
+            "details": long_token_data
         }), 400
 
     long_token = long_resp["access_token"]
@@ -158,6 +175,7 @@ def home():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
+
 
 
 
