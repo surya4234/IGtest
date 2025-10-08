@@ -35,17 +35,18 @@ def login():
 def auth_callback():
     code = request.args.get("code")
     if not code:
-        return "Missing code in callback", 400
+        return "Missing 'code' in callback.", 400
 
-    # Exchange code for short-lived token
     token_url = "https://api.instagram.com/oauth/access_token"
     data = {
         "client_id": CLIENT_ID,
         "client_secret": CLIENT_SECRET,
         "grant_type": "authorization_code",
-        "redirect_uri": "https://igtest-j27v.onrender.com/auth/callback",
+        "redirect_uri": REDIRECT_URI,
         "code": code
     }
+
+    # Exchange authorization code for short-lived token
     response = requests.post(token_url, data=data)
     token_data = response.json()
 
@@ -55,50 +56,17 @@ def auth_callback():
             "details": token_data
         }), 400
 
-    short_token = token_data["access_token"]
+    access_token = token_data["access_token"]
     user_id = token_data["user_id"]
 
-    # Exchange for long-lived token
-    # long_token_url = "https://graph.instagram.com/access_token"
-    # params = {
-    #     "grant_type": "ig_exchange_token",
-    #     "client_secret": CLIENT_SECRET,
-    #     "access_token": short_token
-    # }
-    # long_resp = requests.get(long_token_url, params=params).json()
-
-    # if "access_token" not in long_resp:
-    #     return jsonify({
-    #         "error": "Failed to get long-lived token",
-    #         "details": long_resp
-    #     }), 400
-    # Exchange short-lived token for long-lived token
-    long_token_url = "https://graph.instagram.com/access_token"
-    params = {
-        "grant_type": "ig_exchange_token",
-        "client_secret": CLIENT_SECRET,
-        "access_token": short_token
-    }
-    
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    long_token_response = requests.post(long_token_url, data=params, headers=headers)
-    long_token_data = long_token_response.json()
-    
-    if "access_token" not in long_token_data:
-        return jsonify({
-            "error": "Failed to get long-lived token",
-            "details": long_token_data
-        }), 400
-
-    long_token = long_resp["access_token"]
-    # Store token in memory for the user
-    user_tokens[user_id] = long_token
+    # Save in session/in-memory
+    user_tokens[user_id] = access_token
     session["user_id"] = user_id
 
     return jsonify({
-        "message": "✅ Authentication successful",
+        "message": "✅ Authentication successful (short-lived token)",
         "user_id": user_id,
-        "long_lived_token": long_token
+        "access_token": access_token
     })
 
 # -------------------- Step 3: Fetch User Posts --------------------
@@ -110,19 +78,17 @@ def fetch_posts():
 
     token = user_tokens[user_id]
     url = f"https://graph.instagram.com/{user_id}/media"
-    params = {
-        "fields": "id,caption",
-        "access_token": token
-    }
+    params = {"fields": "id,caption", "access_token": token}
+
     resp = requests.get(url, params=params)
-    resp_data = resp.json()
+    data = resp.json()
 
     if resp.status_code != 200:
-        return jsonify({"error": "Failed to fetch posts", "details": resp_data}), resp.status_code
+        return jsonify({"error": "Failed to fetch posts", "details": data}), resp.status_code
 
-    return jsonify(resp_data)
+    return jsonify(data)
 
-# -------------------- Step 4: Fetch Comments + Sentiment --------------------
+# -------------------- Step 4: Fetch Comments + Analyze Sentiment --------------------
 @app.route("/fetch_comments/<media_id>")
 def fetch_comments(media_id):
     user_id = session.get("user_id")
@@ -131,18 +97,16 @@ def fetch_comments(media_id):
 
     token = user_tokens[user_id]
     url = f"https://graph.instagram.com/{media_id}/comments"
-    params = {
-        "fields": "id,text,username",
-        "access_token": token
-    }
-    resp = requests.get(url, params=params)
-    comments_data = resp.json()
+    params = {"fields": "id,text,username", "access_token": token}
 
-    if resp.status_code != 200 or "data" not in comments_data:
-        return jsonify({"error": "Failed to fetch comments", "details": comments_data}), resp.status_code
+    resp = requests.get(url, params=params)
+    data = resp.json()
+
+    if resp.status_code != 200 or "data" not in data:
+        return jsonify({"error": "Failed to fetch comments", "details": data}), resp.status_code
 
     results = []
-    for comment in comments_data["data"]:
+    for comment in data["data"]:
         text = comment.get("text", "")
         results.append({
             "id": comment.get("id"),
@@ -169,14 +133,9 @@ def logout():
 # -------------------- Health Check --------------------
 @app.route("/")
 def home():
-    return "✅ Instagram Sentiment Backend Running"
+    return "✅ Instagram Sentiment Backend Running (Short-Lived Token Mode)"
 
 # -------------------- Run App --------------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=True)
-
-
-
-
-
